@@ -1,0 +1,42 @@
+package memManager;
+
+import java.io.*;
+
+public class Multiway {
+
+    private Multiway() { // constructor
+    }
+
+    // This is a merger that merges the sorted streams to write them on a file
+    private static void merge(In[] inputs, String finalFile) {
+        int numInputs = inputs.length;
+        IndexMinPQ<String> minPQ = new IndexMinPQ<String>(numInputs);
+        try (BufferedWriter writer = new BufferedWriter(new FileWriter(finalFile))) {
+            for (int i = 0; i < numInputs; i++) {
+                if (!inputs[i].isEmpty()) {
+                    minPQ.insert(i, inputs[i].readString());
+                }
+            }
+
+            while (!minPQ.isEmpty()) {
+                String minStr = minPQ.minKey();
+                writer.write(minStr);
+                writer.newLine(); // Write a newline after each string
+                int coun = minPQ.delMin();
+                if (!inputs[coun].isEmpty()) {
+                    minPQ.insert(coun, inputs[coun].readString());
+                }
+            }
+        } catch (IOException ignored) {
+        }
+    }
+
+    public static void fileMerger(String[] filenames, String finalFile) {
+        int numFiles = filenames.length;
+        In[] inputStreams = new In[numFiles];
+        for (int k = 0; k < numFiles; k++) {
+            inputStreams[k] = new In(filenames[k]);
+        }
+        merge(inputStreams, finalFile);
+    }
+}

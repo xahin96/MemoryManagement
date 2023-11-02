@@ -1,0 +1,371 @@
+package memoryManagement;
+
+import java.io.*;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Random;
+
+import static memoryManagement.Multiway.mergeFiles;
+
+/**
+ * BTree class representing a B-tree data structure.
+ *
+ * @param <Key>   The key type.
+ * @param <Value> The value type.
+ */
+public class BTree<Key extends Comparable<Key>, Value> {
+    private static final int M = 4;    // Max children per B-tree node = M-1
+
+    private Node root;             // Root of the B-tree
+    private int height;           // Height of the B-tree
+    private int size;             // Number of key-value pairs in the B-tree
+
+    // Helper B-tree node data type
+    private static final class Node {
+        private int childCount;                    // Number of children
+        private Entry[] children = new Entry[M];   // Array of children
+
+        private Node(int childCount) {
+            this.childCount = childCount;
+        }
+    }
+
+    // Internal nodes: only use key and next
+    // External nodes: only use key and value
+    private static class Entry {
+        private Comparable key;
+        private Object value;
+        private Node next;     // Helper field to iterate over array entries
+
+        public Entry(Comparable key, Object value, Node next) {
+            this.key = key;
+            this.value = value;
+            this.next = next;
+        }
+    }
+
+    // Constructor
+    public BTree() {
+        root = new Node(0);
+    }
+
+    // Return the number of key-value pairs in the B-tree
+    public int size() {
+        return size;
+    }
+
+    // Return the height of the B-tree
+    public int height() {
+        return height;
+    }
+
+    // Search for a given key and return the associated value; return null if no such key
+    public Value get(Key key) {
+        return search(root, key, height);
+    }
+
+    private Value search(Node x, Key key, int ht) {
+        Entry[] children = x.children;
+
+        // External node
+        if (ht == 0) {
+            for (int j = 0; j < x.childCount; j++) {
+                if (eq(key, children[j].key)) return (Value) children[j].value;
+            }
+        }
+
+        // Internal node
+        else {
+            for (int j = 0; j < x.childCount; j++) {
+                if (j + 1 == x.childCount || less(key, children[j + 1].key))
+                    return search(children[j].next, key, ht - 1);
+            }
+        }
+        return null;
+    }
+
+    // Insert a key-value pair, add code to check for duplicate keys
+    public void put(Key key, Value value) {
+        Node u = insert(root, key, value, height);
+        size++;
+        if (u == null) return;
+
+        // Need to split root
+        Node t = new Node(2);
+        t.children[0] = new Entry(root.children[0].key, null, root);
+        t.children[1] = new Entry(u.children[0].key, null, u);
+        root = t;
+        height++;
+    }
+
+    private Node insert(Node h, Key key, Value value, int ht) {
+        int j;
+        Entry t = new Entry(key, value, null);
+
+        // External node
+        if (ht == 0) {
+            for (j = 0; j < h.childCount; j++) {
+                if (less(key, h.children[j].key)) break;
+            }
+        }
+
+        // Internal node
+        else {
+            for (j = 0; j < h.childCount; j++) {
+                if ((j + 1 == h.childCount) || less(key, h.children[j + 1].key)) {
+                    Node u = insert(h.children[j++].next, key, value, ht - 1);
+                    if (u == null) return null;
+                    t.key = u.children[0].key;
+                    t.next = u;
+                    break;
+                }
+            }
+        }
+
+        for (int i = h.childCount; i > j; i--) h.children[i] = h.children[i - 1];
+        h.children[j] = t;
+        h.childCount++;
+        if (h.childCount < M) return null;
+        else return split(h);
+    }
+
+    // Split a node in half
+    private Node split(Node h) {
+        Node t = new Node(M / 2);
+        h.childCount = M / 2;
+        for (int j = 0; j < M / 2; j++)
+            t.children[j] = h.children[M / 2 + j];
+        return t;
+    }
+
+    // For debugging
+    public String toString() {
+        return toString(root, height, "") + "\n";
+    }
+
+    private String toString(Node h, int ht, String indent) {
+        String s = "";
+        Entry[] children = h.children;
+
+        if (ht == 0) {
+            for (int j = 0; j < h.childCount; j++) {
+                s += indent + children[j].key + " " + children[j].value + "\n";
+            }
+        } else {
+            for (int j = 0; j < h.childCount; j++) {
+                if (j > 0) s += indent + "(" + children[j].key + ")\n";
+                s += toString(children[j].next, ht - 1, indent + "     ");
+            }
+        }
+        return s;
+    }
+
+    // Comparison functions - make Comparable instead of Key to avoid casts
+    private boolean less(Comparable k1, Comparable k2) {
+        return k1.compareTo(k2) < 0;
+    }
+
+    private boolean eq(Comparable k1, Comparable k2) {
+        return k1.compareTo(k2) == 0;
+    }
+
+
+    //region create list of strings and saving in dat file ------------------------------------
+    // Generate a list of random strings
+    public static List<String> generateRandomStrings(int size, int length) {
+        List<String> list = new ArrayList<>();
+        Random rand = new Random();
+        for (int i = 0; i < size; i++) {
+            StringBuilder sb = new StringBuilder();
+            for (int j = 0; j < length; j++) {
+                char randomChar = (char) (rand.nextInt(26) + 'a');
+                sb.append(randomChar);
+            }
+            list.add(sb.toString());
+        }
+        return list;
+    }
+
+    // Quicksort algorithm to sort a list of strings
+    public static void quickSort(List<String> list) {
+        if (list.size() <= 1) return;
+
+        int middle = list.size() / 2;
+        String pivot = list.get(middle);
+
+        List<String> less = new ArrayList<>();
+        List<String> equal = new ArrayList<>();
+        List<String> greater = new ArrayList<>();
+
+        for (String str : list) {
+            int cmp = str.compareTo(pivot);
+            if (cmp < 0) {
+                less.add(str);
+            } else if (cmp > 0) {
+                greater.add(str);
+            } else {
+                equal.add(str);
+            }
+        }
+
+        quickSort(less);
+        quickSort(greater);
+
+        list.clear();
+        list.addAll(less);
+        list.addAll(equal);
+        list.addAll(greater);
+    }
+
+    // Save a list of strings to a file
+    public static void saveToFile(List<String> list, String fileName) {
+        try (BufferedWriter writer = new BufferedWriter(new FileWriter(fileName))) {
+            for (String str : list) {
+                writer.write(str);
+                writer.newLine();
+            }
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+    }
+    //endregion -------------------------------------------------------------------------------
+
+
+    //region in order traversal ---------------------------------------------------------------
+    public void inOrderTraversal() {
+        inOrderTraversal(root, height);
+    }
+
+    private void inOrderTraversal(Node x, int ht) {
+        if (x == null) return;
+
+        Entry[] children = x.children;
+
+        if (ht == 0) {
+            for (int j = 0; j < x.childCount; j++) {
+                System.out.println(children[j].key + ": " + children[j].value);
+            }
+        } else {
+            for (int j = 0; j < x.childCount; j++) {
+                inOrderTraversal(children[j].next, ht - 1);
+                System.out.println(children[j].key + ": " + children[j].value);
+            }
+        }
+    }
+    //endregion -------------------------------------------------------------------------------
+
+
+    //region save keys in-order ---------------------------------------------------------------
+    // Add this method to your BTree class
+    public boolean isEmpty() {
+        return size == 0;
+    }
+    // Add this method to your BTree class
+    public void saveKeysAndValuesInOrder(BufferedWriter writer) {
+        if (isEmpty()) {
+            return;
+        }
+
+        try {
+            saveKeysAndValuesInOrder(root, writer);
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+    }
+
+    private void saveKeysAndValuesInOrder(Node x, BufferedWriter writer) throws IOException {
+        if (x == null) {
+            return;
+        }
+
+        Entry[] children = x.children;
+
+        if (x.childCount == 0) {
+            return;
+        }
+
+        if (x.childCount == 1) {
+            saveKeysAndValuesInOrder(x.children[0].next, writer);
+            writer.write(x.children[0].key.toString() + ": " + x.children[0].value);
+            writer.newLine();
+        } else {
+            saveKeysAndValuesInOrder(x.children[0].next, writer);
+            writer.write(x.children[0].key.toString() + ": " + x.children[0].value);
+            writer.newLine();
+
+            for (int j = 1; j < x.childCount - 1; j++) {
+                saveKeysAndValuesInOrder(x.children[j].next, writer);
+                writer.write(x.children[j].key.toString() + ": " + x.children[j].value);
+                writer.newLine();
+            }
+            saveKeysAndValuesInOrder(x.children[x.childCount - 1].next, writer);
+        }
+    }
+    //endregion -------------------------------------------------------------------------------
+
+
+
+    /*************************************************************************
+    *  test client
+    *************************************************************************/
+    public static void main(String[] args) {
+        //region task 1 ------------------------------------------------------------------------------
+        int numLists = 4;
+        int listSize = 1000;
+        int stringLength = 10;
+
+        // Create and sort four lists of random strings
+        List<String>[] lists = new ArrayList[numLists];
+        for (int i = 0; i < numLists; i++) {
+            lists[i] = generateRandomStrings(listSize, stringLength);
+            quickSort(lists[i]);
+            saveToFile(lists[i], "List_" + (char) ('A' + i) + ".dat");
+        }
+
+        String[] inputFiles = {"List_A.dat", "List_B.dat", "List_C.dat", "List_D.dat"};
+        String outputFile = "multiway-sorted.dat";
+        mergeFiles(inputFiles, outputFile);
+
+        // Create a B-tree for strings with values set to "0"
+        BTree<String, String> st = new BTree<String, String>();
+
+        // Insert sorted strings from "multiway-sorted.dat" with values set to "0"
+        try (BufferedReader reader = new BufferedReader(new FileReader("multiway-sorted.dat"))) {
+            String line;
+            while ((line = reader.readLine()) != null) {
+                st.put(line, String.valueOf(0));
+            }
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+
+        // Print the B-tree in in-order traversal for Task 1
+        st.inOrderTraversal();
+        //endregion -------------------------------------------------------------------------------
+
+
+        //region task 2 ------------------------------------------------------------------------------
+        BTree<String, Integer> bTree = new BTree<>();
+
+        // Insert reads from "Chip-seq-reads-1M.txt" with values set to "0"
+        try (BufferedReader reader = new BufferedReader(new FileReader("Chip-seq-reads-1M.txt"))) {
+            String line;
+            while ((line = reader.readLine()) != null) {
+                bTree.put(line, 0);
+            }
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+
+        // Print the B-tree in in-order traversal for Task 2
+        // bTree.inOrderTraversal();
+
+        // Save the output of all keys and values in a file called "B-tree.dat" for Task 2
+        try (BufferedWriter writer = new BufferedWriter(new FileWriter("B-tree.dat"))) {
+            bTree.saveKeysAndValuesInOrder(writer);
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+        //endregion ----------------------------------------------------------------------------------
+    }
+}

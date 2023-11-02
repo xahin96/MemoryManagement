@@ -1,0 +1,45 @@
+package memoryManagement;
+
+import java.io.*;
+
+public class Multiway {
+
+    // This class should not be instantiated.
+    private Multiway() {
+    }
+
+    // Merge together the sorted input streams and write the sorted result to a file with each string on a new line.
+    private static void merge(In[] inputs, String outputFile) {
+        int numInputs = inputs.length;
+        IndexMinPQ<String> minPQ = new IndexMinPQ<String>(numInputs);
+        try (BufferedWriter writer = new BufferedWriter(new FileWriter(outputFile))) {
+            for (int i = 0; i < numInputs; i++) {
+                if (!inputs[i].isEmpty()) {
+                    minPQ.insert(i, inputs[i].readString());
+                }
+            }
+
+            // Extract and write the minimum string and read the next from its stream.
+            while (!minPQ.isEmpty()) {
+                String minStr = minPQ.minKey();
+                writer.write(minStr);
+                writer.newLine(); // Write a newline after each string
+                int i = minPQ.delMin();
+                if (!inputs[i].isEmpty()) {
+                    minPQ.insert(i, inputs[i].readString());
+                }
+            }
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+    }
+
+    public static void mergeFiles(String[] filenames, String outputFile) {
+        int numFiles = filenames.length;
+        In[] inputStreams = new In[numFiles];
+        for (int i = 0; i < numFiles; i++) {
+            inputStreams[i] = new In(filenames[i]);
+        }
+        merge(inputStreams, outputFile);
+    }
+}
